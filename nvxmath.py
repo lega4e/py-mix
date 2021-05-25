@@ -20,6 +20,14 @@ def gcd(a, b=None):
 		a, b = b, a
 	return b
 
+
+def lcm(a, b=None):
+	'Нахождение НОК'
+	if b is None:
+		return lcm(a[0], a[1])
+	return a // gcd(a, b) * b
+
+
 def fac(n):
 	'Факториал'
 	p = 1
@@ -27,15 +35,18 @@ def fac(n):
 		p *= i
 	return p
 
+
 def У(k, n):
 	'Число размещений k элементов из n'
 	p = 1
 	for i in range(k):
 		p *= n - i
 
+
 def C(k, n):
 	'Число сочетаний k элементов из n'
 	return P(k, n) // fac(k)
+
 
 def reduce(a, b=None):
 	'Сокращение дроби'
@@ -43,6 +54,7 @@ def reduce(a, b=None):
 	if b is None:
 		return a[0] // g, a[1] // g
 	return a // g, b // g
+
 
 def striling(n):
 	'Приближенное вычисление факториала по формуле Стирлинга'

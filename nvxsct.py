@@ -6,7 +6,7 @@
 # через точку
 #
 
-class struct:
+class sct:
 	def __init__(self, **kargs):
 		for key, value in kargs.items():
 			self.__dict__[key] = value
@@ -35,7 +35,7 @@ class struct:
 			return
 		pkey = key[:point]
 		if pkey not in self.__dict__:
-			self.__dict__[pkey] = struct()
+			self.__dict__[pkey] = sct()
 		self.__dict__[pkey][key[point+1:]] = value
 		return
 
@@ -43,11 +43,11 @@ class struct:
 		for item in self.__dict__.items():
 			yield item
 
-	def pretty(self, tab='', name='struct'):
+	def pretty(self, tab='', name='sct'):
 		length = max(list(map(
 			lambda s: len(s),
 			filter(
-				lambda key: not isinstance(self.__dict__[key], struct),
+				lambda key: not isinstance(self.__dict__[key], sct),
 				self.__dict__.keys()
 			)
 		)) + [0])
@@ -55,7 +55,7 @@ class struct:
 		tab += '  '
 		for key in self.__dict__.keys():
 			obj = self.__dict__[key]
-			if isinstance(obj, struct):
+			if isinstance(obj, sct):
 				s += obj.pretty(tab, name=key)
 			else:
 				s += (
@@ -70,8 +70,6 @@ class struct:
 		if isinstance(val, str):
 			return "'" + val + "'"
 		return str(val)
-
-sct = struct
 
 
 
