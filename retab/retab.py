@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import argparse
 import sys
 
 
@@ -7,12 +8,14 @@ import sys
 
 
 # functions
+tabsize = 4
+
 def spaces2tabs(line):
 	while True:
 		pos = line.find(' '*tabsize)
 		if pos < 0 or (line[:pos] != '' and not line[:pos].isspace()):
 			break
-		line = line[:pos] + '\t' + line[pos+4:]
+		line = line[:pos] + '\t' + line[pos+tabsize:]
 	return line
 
 def tabs2spaces(line):
@@ -28,17 +31,37 @@ def tabs2spaces(line):
 
 
 
-# main
-tabsize = 4
+# parser
+parser = argparse.ArgumentParser(
+	description="Replace space on line start with tabs or vice versa"
+)
 
-mode = None if len(sys.argv) == 1 else sys.argv[1]
+parser.add_argument(
+	'-t', '--tabsize', dest='tabsize',
+	help='Space per tab',
+	type=int, default=tabsize
+)
+
+parser.add_argument(
+	'-a', '--action', dest='action',
+	help='s2t (spaces to tabs) or t2s (tab to spaces)',
+	required=True, choices=['s2t', 't2s']
+)
+
+args = parser.parse_args()
+
+
+
+# main
+tabsize = args.tabsize
+action  = args.action
 
 try:
 	while True:
 		line = input()
-		if mode == 's2t':
+		if action == 's2t':
 			line = spaces2tabs(line)
-		elif mode == 't2s':
+		elif action == 't2s':
 			line = tabs2spaces(line)
 		print(line)
 except EOFError:
