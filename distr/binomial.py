@@ -14,10 +14,8 @@ from funs import *
 n = 100
 
 charts = [ (i/10, 1 - i/10) for i in range(1, 10) ]
-#  charts = [ (0.5, 0.5) ]
 
 for i in range(len(charts)):
-	print(i)
 	x = np.arange(0, n+1)
 	y = np.zeros((n+1,))
 

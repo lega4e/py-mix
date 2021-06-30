@@ -29,11 +29,12 @@ def plot(charts):
 	fig, ax = plt.subplots()
 
 	for x, y, label in charts:
-		ax.plot(x, y, label=label)
+		ax.plot(x, y, label=label, linewidth=3)
 
 	ax.set_xlabel('n')
 	ax.set_ylabel('p')
 	ax.set_title('Distributions')
+	ax.grid()
 	ax.legend()
 
 	plt.figure(figsize=(3, 3))
