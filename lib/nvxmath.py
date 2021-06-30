@@ -36,11 +36,12 @@ def fac(n):
 	return p
 
 
-def У(k, n):
+def P(k, n):
 	'Число размещений k элементов из n'
 	p = 1
 	for i in range(k):
 		p *= n - i
+	return p
 
 
 def C(k, n):
