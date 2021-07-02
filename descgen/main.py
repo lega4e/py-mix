@@ -60,7 +60,9 @@ while True:
 	try:             line = input()
 	except EOFError: break
 
-	p = min([line.find(sub) for sub in inpseps])
+	found = list(filter(lambda x: x >= 0, [line.find(sep) for sep in inpseps]))
+	p     = min(found) if len(found) != 0 else len(line)
+
 	value = line[:p].strip()
 	valuemaxlen = max(valuemaxlen, len(value))
 
@@ -83,8 +85,10 @@ for i in range(len(items)):
 	)
 
 	lines = []
-	line  = value + ' ' * (valuemaxlen - len(value) + outspace)
-	line += outdescbegin + ' ' + desc[0]
+	line = ''
+	if len(value) != 0:
+		line  = value + ' ' * (valuemaxlen - len(value) + outspace)
+		line += outdescbegin + ' ' + desc[0]
 	lines.append(line)
 
 	for descline in desc[1:]:
@@ -98,7 +102,10 @@ for i in range(len(items)):
 
 # write
 for lines in items:
-	print(*lines, sep='\n', end='\n\n' if emptyline else '\n')
+	if len(lines) == 1 and len(lines[0]) == 0:
+		print()
+	else:
+		print(*lines, sep='\n', end='\n\n' if emptyline else '\n')
 
 
 
