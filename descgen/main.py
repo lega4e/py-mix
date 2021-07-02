@@ -38,12 +38,12 @@ def split_string(s : str, l : int) -> [ str ]:
 	line  = ''
 	while wordi < len(words):
 		if len(line) + len(words[wordi]) + 1 <= l or len(line) == 0:
-			line += ' ' + words[wordi]
+			line += words[wordi] + ' '
 			wordi += 1
 		else:
-			lines.append(line)
+			lines.append(line[:-1])
 			line = ''
-	lines.append(line)
+	lines.append(line[:-1])
 
 	return lines;
 
