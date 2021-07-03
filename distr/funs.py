@@ -37,7 +37,6 @@ def plot(charts):
 	ax.grid()
 	ax.legend()
 
-	plt.figure(figsize=(3, 3))
 	plt.show()
 
 
