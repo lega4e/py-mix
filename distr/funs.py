@@ -25,7 +25,7 @@ def C(k, n):
 	return P(k, n) // fac(k)
 
 
-def plot(charts):
+def plot(charts, name="Plot"):
 	fig, ax = plt.subplots()
 
 	for x, y, label in charts:
@@ -33,7 +33,7 @@ def plot(charts):
 
 	ax.set_xlabel('n')
 	ax.set_ylabel('p')
-	ax.set_title('Distributions')
+	ax.set_title(name)
 	ax.grid()
 	ax.legend()
 

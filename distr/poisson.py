@@ -17,7 +17,7 @@ def poisson(k, l):
 
 n = 40
 
-charts = [ 5, 10, 20 ]
+charts = [ 1, 2, 5, 10, 20 ]
 
 for i in range(len(charts)):
 	x = list(range(0, n+1))
