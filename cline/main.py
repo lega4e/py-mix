@@ -43,6 +43,9 @@ commands = {
 	),
 	'vk'      : None,
 
+	'киви'    : lambda args='': open_url('https://qiwi.com/main'),
+	'qiwi'    : None,
+
 	'ютуб'    : lambda args='': open_url(
 		'https://www.youtube.com/results?search_query=%s' % args
 		if len(args) != 0 else
@@ -125,9 +128,9 @@ commands = {
 	),
 	'qt'      : None,
 
-	
 
-	'почта'   : lambda args='': open_url('https://mail.yandex.ru/?uid=207490934#inbox'),
+
+	'почта'   : lambda args='': open_url('https://mail.yandex.ru/lite/'),
 	'post'    : None,
 
 	'диск'    : lambda args='': open_url('https://disk.yandex.ru/client/disk?source=domik-main'),
@@ -290,6 +293,7 @@ commands = {
 
 commands['word']    = commands['слово']
 commands['vk']      = commands['вк']
+commands['qiwi']    = commands['киви']
 commands['см']      = commands['ютуб']
 commands['you']     = commands['ютуб']
 commands['youtube'] = commands['ютуб']
