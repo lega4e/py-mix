@@ -3,6 +3,16 @@
 import argparse
 import os
 import re
+import sys
+
+
+
+
+
+# objects
+tag_re    = re.compile(r'#[\w_]+')
+code_re   = re.compile(r'```')
+incode_re = re.compile(r'`')
 
 
 
@@ -26,23 +36,19 @@ def contains(inters, val):
 
 
 
-
-
-# objects
-tag_re  = re.compile(r'#[\w_]+')
-code_re = re.compile(r'```')
-dname   = '/home/lis/.local/obsidian/main/Zettelkasten'
-
-
-
-
-
-# core functions
 def tag_iter(data):
 	inters = [ edge.span()[0] for edge in re.finditer(code_re, data) ]
 	if len(inters) % 2 == 1:
 		inters.append(len(data))
 	inters = [ (inters[i], inters[i+1]) for i in range(0, len(inters), 2) ]
+
+	inline = [ edge.span()[0] for edge in re.finditer(incode_re, data) ]
+	inline = list(filter(lambda x: not contains(inters, x), inline))
+	if len(inline) % 2 == 1:
+		inline.append(len(data))
+	inline = [ (inline[i], inline[i+1]) for i in range(0, len(inline), 2) ]
+
+	inters.extend(inline)
 
 	for tag in re.finditer(tag_re, data):
 		if contains(inters, tag.span()[0]) or contains(inters, tag.span()[1]):
@@ -50,20 +56,7 @@ def tag_iter(data):
 
 		yield tag
 
-
-def count_tags(dname):
-	tags = {}
-
-	for fname in sorted(os.listdir(dname)):
-		if len(fname) < 2 or fname[-2:] != 'md':
-			continue
-
-		data = open(os.path.join(dname, fname)).read()
-		for match in tag_iter(data):
-			tags[match.group()] = tags.get(match.group(), 0) + 1
-
-
-def replace_tags(data, repmap):
+def replace_tags_data(data, repmap):
 	pos = 0
 	res = ''
 	for tag in tag_iter(data):
@@ -105,7 +98,7 @@ def create_parser():
 		'--recursive',
 		dest   = 'recursive',
 		action = 'store_true',
-		help   = 'Обработать указанную папку рекурсивно'
+		help   = 'Обработать указанную (-d) папку рекурсивно'
 	)
 
 	parser.add_argument(
@@ -140,33 +133,95 @@ def create_parser():
 
 
 ############################################################
+# argument handling
+def get_files(args):
+	files = []
+
+	# args
+	if args.file is not None:
+		if not os.path.isfile(args.file):
+			print('Ошибка: файл "%s" не существует' % args.file, file=sys.stderr)
+			exit(-1)
+		files.append(args.file)
+
+	if args.dir is not None:
+		if args.recursive:
+			recursive(
+				args.dir,
+				lambda f: files.append(f),
+				onlyfiles=True )
+		else:
+			for fname in os.listdir(args.dir):
+				files.append(fname)
+
+	if not args.nomdonly:
+		files = list(filter(lambda f: len(f) > 2 and f[-2:] == 'md', files))
+
+	return files
+
+
+def read_tagmap(map):
+	try:
+		tagmap = eval(map)
+	except Exception as e:
+		print('xError: ' + str(e), file=sys.stderr)
+		exit(-1)
+
+	tmp = {}
+	for key, value in tagmap.items():
+		if not isinstance(key, str) or not isinstance(value, str):
+			print("Ошибка: элементы отображения должны быть строками", file=sys.stderr)
+			exit(-1)
+
+		if len(key) > 0 and key[0] != '#':
+			key = '#' + key
+		if len(value) > 0 and value[0] != '#':
+			value = '#' + value
+
+		tmp[key] = value
+
+	return tmp
+
+
+
+
+
+############################################################
+# main actions
+def count_tags(files):
+	tags = {}
+
+	for file in files:
+		data = open(file).read()
+		for match in tag_iter(data):
+			tags[match.group()] = tags.get(match.group(), 0) + 1
+
+	return tags
+
+
+def replace_tags(files, tagmap):
+	for file in files:
+		data = replace_tags_data(open(file, 'r').read(), tagmap)
+		open(file, 'w').write(data)
+
+
+
+
+
+############################################################
 # main
 parser = create_parser()
-args = parser.parse_args()
+args   = parser.parse_args()
+files  = get_files(args)
 
-files = []
-
-if args.file is not None:
-	files.append(args.file)
-
-if args.dir is not None:
-	if args.recursive:
-		recursive(
-			args.dir,
-			lambda f: files.append(f),
-			onlyfiles=True
-		)
-
-	else:
-		for fname in os.listdir(args.dir):
-			files.append(fname)
-
-if not args.nomdonly:
-	files = list(filter(lambda f: len(f) > 2 and f[-2:] == 'md', files))
-
-print(files)
-
-
+if args.count:
+	print(re.sub(r"'", r'"', str(count_tags(files))))
+elif args.map:
+	tagmap = read_tagmap(args.map)
+	replace_tags(files, tagmap)
+else:
+	parser.print_help()
+	exit(0)
 
 
 
