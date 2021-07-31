@@ -73,7 +73,7 @@ def create_parser():
 
 ############################################################
 # argument handling
-def get_files(args):
+def get_files(args) -> [ str ]:
 	'''
 	Получает все файлы, которые требуют обработки
 	в соответствии с аргументами командной строки.
@@ -83,8 +83,7 @@ def get_files(args):
 	# args
 	if args.file is not None:
 		if not os.path.isfile(args.file):
-			print('Ошибка: файл "%s" не существует' % args.file, file=sys.stderr)
-			exit(-1)
+			raise Exception('Файл "%s" не существует' % args.file)
 		files.append(args.file)
 
 	if args.dir is not None:
@@ -95,6 +94,7 @@ def get_files(args):
 				onlyfiles=True )
 		else:
 			for fname in os.listdir(args.dir):
+				fname = os.path.join(args.dir, fname)
 				if os.path.isfile(fname):
 					files.append(fname)
 
@@ -111,17 +111,13 @@ def read_tagmap(map: str) -> { str : str }:
 	строка должна иметь тот же формат, с помощью которго
 	в питоне задаётся словарь, например, "{ 'one' : 'another' }"
 	'''
-	try:
-		tagmap = eval(map)
-	except Exception as e:
-		print('Error: ' + str(e), file=sys.stderr)
-		exit(-1)
+	# Может выкинуть исключение
+	tagmap = eval(map)
 
 	tmp = {}
 	for key, value in tagmap.items():
 		if not isinstance(key, str) or not isinstance(value, str):
-			print("Ошибка: элементы отображения должны быть строками", file=sys.stderr)
-			exit(-1)
+			raise Exception("Элементы отображения должны быть строками")
 
 		if len(key) > 0 and key[0] != '#':
 			key = '#' + key

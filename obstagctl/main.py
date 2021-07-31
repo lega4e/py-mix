@@ -39,6 +39,15 @@ def replace_tags(files: [ str ], tagmap: { str : str }):
 		open(fname, 'w').write(data)
 
 
+def check_files(files, recursive):
+	if len(files) == 0:
+		if not recursive:
+			print('Ошибка: Файлы не найдены; попробуйте ключ -r (--recursive)', file=sys.stderr)
+		else:
+			print('Ошибка: Файлы не найдены', file=sys.stderr)
+		exit(-1)
+
+
 
 
 
@@ -47,12 +56,23 @@ def replace_tags(files: [ str ], tagmap: { str : str }):
 def main():
 	parser = create_parser()
 	args   = parser.parse_args()
-	files  = get_files(args)
+
+	try:
+		files  = get_files(args)
+	except Exception as e:
+		print("Ошибка: " + str(e), file=sys.stderr)
+		exit(-1)
 
 	if args.count:
+		check_files(files, args.recursive)
 		print(re.sub(r"'", r'"', str(count_tags(files))))
 	elif args.map:
-		tagmap = read_tagmap(args.map)
+		try:
+			tagmap = read_tagmap(args.map)
+		except Exception as e:
+			print("Ошибка: " + str(e), file=sys.stderr)
+			exit(-1)
+		check_files(files, args.recursive)
 		replace_tags(files, tagmap)
 	else:
 		parser.print_help()
