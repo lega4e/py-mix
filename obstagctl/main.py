@@ -63,9 +63,34 @@ def main():
 		print("Ошибка: " + str(e), file=sys.stderr)
 		exit(-1)
 
-	if args.count:
+	if args.count or args.count_total:
 		check_files(files, args.recursive)
-		print(re.sub(r"'", r'"', str(count_tags(files))))
+		tags = count_tags(files)
+
+		if args.json_output:
+			result = {}
+		else:
+			result = ''
+
+		if args.count_total:
+			if args.json_output:
+				result['total'] = len(tags)
+			else:
+				result += 'Различных тегов: %i\n' % len(tags)
+
+		if args.count:
+			if args.json_output:
+				result['tags'] = tags
+			else:
+				sorted_tags = [ (tag, count) for tag, count in tags.items() ]
+				sorted_tags.sort(key=lambda x: x[1], reverse=True)
+				for tag, count in sorted_tags:
+					result += '%s: %i\n' % (tag, count)
+
+		if args.json_output:
+			print(re.sub(r"'", r'"', str(result)))
+		else:
+			print(result)
 	elif args.map:
 		try:
 			tagmap = read_tagmap(args.map)

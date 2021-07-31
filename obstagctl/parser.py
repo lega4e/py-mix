@@ -34,7 +34,15 @@ def create_parser():
 		'--count',
 		dest   = 'count',
 		action = 'store_true',
-		help   = 'Посчитать количество тегов и выдать в формате json'
+		help   = 'Посчитать, сколько используется каждый тег'
+	)
+
+	parser.add_argument(
+		'-C',
+		'--count-total',
+		dest   = 'count_total',
+		action = 'store_true',
+		help   = 'Посчитать число различных тегов'
 	)
 
 	parser.add_argument(
@@ -43,7 +51,7 @@ def create_parser():
 		dest = 'map',
 		type = str,
 		help = 'Заменить теги на другие; аргумент должен представлять из себя ' +
-		'словарь в формате json. Пример: \'{ "определения" : "определения", "раз" : "два" }\''
+		'словарь в формате json. Пример: \'{ "определения" : "определение", "#раз" : "#два" }\''
 	)
 
 	parser.add_argument(
@@ -52,6 +60,14 @@ def create_parser():
 		dest   = 'nomdonly',
 		action = 'store_true',
 		help   = 'Обрабатывать все файлы, а не только с расширением md'
+	)
+
+	parser.add_argument(
+		'-j',
+		'--json-output',
+		dest   = 'json_output',
+		action = 'store_true',
+		help   = 'Выводить в формате Json'
 	)
 
 	return parser
