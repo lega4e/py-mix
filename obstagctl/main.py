@@ -75,8 +75,8 @@ def main():
 		check_files(files, args.recursive)
 		replace_tags(files, tagmap)
 	else:
-		parser.print_help()
-		exit(0)
+		print('Укажите действие')
+		exit(-1)
 
 
 

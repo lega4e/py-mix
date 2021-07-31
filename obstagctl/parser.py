@@ -16,20 +16,9 @@ def create_parser():
 	parser = argparse.ArgumentParser(description='Программа для управления тегами в MarkDown-заметках')
 
 	parser.add_argument(
-		'-f',
-		'--file',
-		dest = 'file',
+		'file',
 		type = str,
-		help = 'Указать файл для обработки'
-	)
-
-	parser.add_argument(
-		'-d',
-		'--directory',
-		dest = 'dir',
-		type = str,
-		help = 'Указать директорию, все файлы в которой будут обработаны ' +
-			   '(укажите -r, чтобы обработать директорию рекурсивно)'
+		help = 'Файл или директория для обработки'
 	)
 
 	parser.add_argument(
@@ -81,22 +70,22 @@ def get_files(args) -> [ str ]:
 	files = []
 
 	# args
-	if args.file is not None:
-		if not os.path.isfile(args.file):
-			raise Exception('Файл "%s" не существует' % args.file)
-		files.append(args.file)
+	if os.path.isfile(args.file):
+		return [ args.file ]
 
-	if args.dir is not None:
-		if args.recursive:
-			recursive(
-				args.dir,
-				lambda f: files.append(f),
-				onlyfiles=True )
-		else:
-			for fname in os.listdir(args.dir):
-				fname = os.path.join(args.dir, fname)
-				if os.path.isfile(fname):
-					files.append(fname)
+	if not os.path.isdir(args.file):
+		raise Exception('Файл "%s" не существует' % args.file)
+
+	if args.recursive:
+		recursive(
+			args.file,
+			lambda f: files.append(f),
+			onlyfiles=True )
+	else:
+		for fname in os.listdir(args.file):
+			fname = os.path.join(args.file, fname)
+			if os.path.isfile(fname):
+				files.append(fname)
 
 	if not args.nomdonly:
 		files = list(filter(lambda f: len(f) > 2 and f[-2:] == 'md', files))
