@@ -27,6 +27,7 @@ def open_nemo(url):
 
 # objects
 commands = {
+	'21'       : lambda args='': open_url('https://profile.intra.42.fr/'),
 	'ifconfig' : lambda args='': open_url('https://ifconfig.me/'),
 
 	'слово'   : lambda args='': open_url(
