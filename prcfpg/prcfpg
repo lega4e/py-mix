@@ -1,0 +1,84 @@
+#!/usr/bin/python3
+# Prase codeforces task page
+
+import bs4
+import datetime as dt
+import json
+import re
+import requests as req
+import sys
+
+
+
+
+
+# main
+def main(url, outfile):
+	html = req.get(url).text
+	if len(html) < 3000:
+		return 1
+
+	soup  = bs4.BeautifulSoup(html, 'lxml')
+
+
+	# title
+	title = soup.find(id='sidebar').a.text
+	edu   = title.find('Educational') >= 0
+
+	try:    div = int(re.search(r'Div\.\s*(\d+)', title).group(1))
+	except: div = None
+
+	try:    rnd = int(re.search(r'Round\s*[#№]?\s*(\d+)', title).group(1))
+	except: rnd = None
+
+	name  = (re.match(r'.*/(\d+)/.*', url).group(1) +
+			 soup.find('div', { 'class' : 'problem-statement' }).
+	              find('div', { 'class' : 'title'             }).
+			 text.replace('. ', '.').replace(' ', '-'))
+
+	# tags
+	tags  = list(map(lambda t: t.text.strip(),
+		soup.find_all('span', { 'class' : 'tag-box' })))
+
+	difctag = [ s for s in tags if re.match(r'\*\d+', s) ]
+	if len(difctag) == 1:
+		tags.remove(difctag[0])
+		difc = int(difctag[0][1:])
+	else:
+		difc = None
+
+
+	# forming and write result
+	res = {
+		'source'     : 'codeforces',
+		'url'        : url,
+		'name'       : name,
+		'edu'        : edu,
+		'round'      : rnd,
+		'div'        : div,
+		'tags'       : tags,
+		'difficulty' : difc,
+		'date'       : dt.datetime.now().strftime('%Y.%m.%d %X')
+	}
+
+	with open(outfile, 'w') as file:
+		json.dump(res, file, indent='\t')
+
+	return 0
+
+
+
+
+
+if __name__ == '__main__':
+	if not (2 <= len(sys.argv) <= 3):
+		print("Error: argument count must be equal 1 or 2", file=sys.stderr)
+		exit(1)
+
+	exit(main(sys.argv[1], sys.argv[2] if len(sys.argv) == 3 else '.meta.json'))
+
+
+
+
+
+# end
