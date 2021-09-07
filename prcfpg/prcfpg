@@ -1,5 +1,11 @@
 #!/usr/bin/python3
+#
 # Prase codeforces task page
+#
+# Usage:   prcfpg url [output_filename]
+# Example: prcfpg https://codeforces.com/problemset/problem/1558/E .meta.json
+#
+# L, YOU ARE JUK
 
 import bs4
 import datetime as dt

@@ -191,32 +191,19 @@ commands = {
 
 	'расп'    : lambda args='': open_url('https://e.mospolytech.ru/?p=rasp'),
 	'сдо'     : lambda args='': open_url(
-		'https://lms.mospolytech.ru/grade/report/overview/index.php'
+		'https://online.mospolytech.ru/'
 		if len(args) == 0 else
 		{
-			'англ'    : 'https://lms.mospolytech.ru/course/view.php?id=4293',
-			'дискра'  : 'https://lms.mospolytech.ru/course/view.php?id=1040',
-			'матан'   : 'https://lms.mospolytech.ru/course/view.php?id=313',
-			'физра'   : 'https://lms.mospolytech.ru/course/view.php?id=4436',
-			'виз'     : 'https://lms.mospolytech.ru/course/view.php?id=5309',
-			'viz'     : 'https://lms.mospolytech.ru/course/view.php?id=5309',
-			'инфа'    : 'https://lms.mospolytech.ru/course/view.php?id=2624',
-			'inf'     : 'https://lms.mospolytech.ru/course/view.php?id=2624',
-			'рвп'     : 'https://lms.mospolytech.ru/course/view.php?id=2525',
-			'dwa'     : 'https://lms.mospolytech.ru/course/view.php?id=2525',
-			'всс'     : 'https://lms.mospolytech.ru/course/view.php?id=2609',
-			'csn'     : 'https://lms.mospolytech.ru/course/view.php?id=2609',
-			'поя'     : 'https://lms.mospolytech.ru/course/view.php?id=2356',
-			'pol'     : 'https://lms.mospolytech.ru/course/view.php?id=2356',
-			'жаба'    : 'https://lms.mospolytech.ru/course/view.php?id=2631',
-			'java'    : 'https://lms.mospolytech.ru/course/view.php?id=2631',
-			'уп'      : 'https://lms.mospolytech.ru/course/view.php?id=1446',
-			'пд'      : 'https://lms.mospolytech.ru/course/view.php?id=4251',
-			'им'      : 'https://lms.mospolytech.ru/course/view.php?id=6879',
-			'им21'    : 'https://lms.mospolytech.ru/course/view.php?id=7137',
-			'бд'      : 'https://lms.mospolytech.ru/course/view.php?id=1563',
-			'вт'      : 'https://lms.mospolytech.ru/course/view.php?id=2423',
-			'ит'      : 'https://lms.mospolytech.ru/course/view.php?id=5704',
+			'англ'    : 'https://online.mospolytech.ru/course/view.php?id=7964',
+			'матан'   : 'https://online.mospolytech.ru/course/view.php?id=313',
+			'диффуры' : 'https://online.mospolytech.ru/course/view.php?id=3362',
+			'диф'     : 'https://online.mospolytech.ru/course/view.php?id=3362',
+			'матстат' : 'https://online.mospolytech.ru/course/view.php?id=720',
+			'мс'      : 'https://online.mospolytech.ru/course/view.php?id=720',
+			'теорвер' : 'https://online.mospolytech.ru/course/view.php?id=573',
+			'тв'      : 'https://online.mospolytech.ru/course/view.php?id=573',
+			'физра'   : 'https://online.mospolytech.ru/course/view.php?id=4436',
+			'бд'      : 'https://online.mospolytech.ru/course/view.php?id=1563',
 		}
 		[args]
 	),
