@@ -174,6 +174,8 @@ commands = {
 		}[args]
 	),
 	'stepik'  : None,
+	'дт'      : lambda args='': open_url('https://go.hyls.ru/#'),
+	'dt'      : None,
 
 	'мега'    : lambda args='': open_url('https://mega.nz/fm/account'),
 
@@ -196,8 +198,8 @@ commands = {
 		{
 			'англ'    : 'https://online.mospolytech.ru/course/view.php?id=7964',
 			'матан'   : 'https://online.mospolytech.ru/course/view.php?id=313',
-			'диффуры' : 'https://online.mospolytech.ru/course/view.php?id=3362',
-			'диф'     : 'https://online.mospolytech.ru/course/view.php?id=3362',
+			'диффуры' : 'https://online.mospolytech.ru/course/view.php?id=4396',
+			'диф'     : 'https://online.mospolytech.ru/course/view.php?id=4396',
 			'матстат' : 'https://online.mospolytech.ru/course/view.php?id=720',
 			'мс'      : 'https://online.mospolytech.ru/course/view.php?id=720',
 			'теорвер' : 'https://online.mospolytech.ru/course/view.php?id=573',
@@ -314,6 +316,7 @@ commands['github']  = commands['гитхаб']
 commands['git']     = commands['гитхаб']
 commands['habr']    = commands['хабр']
 commands['stepik']  = commands['степик']
+commands['dt']      = commands['дт']
 commands['mega']    = commands['мега']
 commands['teams']   = commands['тимс']
 commands['nemo']    = commands['немо']
