@@ -6,9 +6,19 @@
 Зависимости:
 - BeautifulSoup (модуль python)
 
+### Первый сайт
+
 Использование:
 
 ```bash
 $ python3 main.py
 $ bash script.sh
+```
+
+### Второй сайт
+
+Использование
+
+```bash
+$ python3 main.py
 ```
