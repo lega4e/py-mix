@@ -49,7 +49,17 @@ TYER = 'TYER' # Год
 def make_parser():
 	parser = ap.ArgumentParser(description='Программа для установки тегов IDv2')
 
-	parser.add_argument('files', nargs='*')
+	parser.add_argument(
+		'files', nargs='*', default=None,
+		help='Указать файлы для обработки; если аргументы отсутствуют, то ' +
+		     'будут взяты все файлы с расширением mp3 из текущей либо ' +
+         'указанной ключом -D директории'
+	)
+
+	parser.add_argument(
+		'-D', '--dir', dest='dir', default='.', type=str,
+		help='Указать, из какой папки брать файлы, если они не указаны явно'
+	)
 
 	parser.add_argument(
 		'-n', '--name', dest='name', default=None, type=str,
@@ -59,6 +69,13 @@ def make_parser():
 	parser.add_argument(
 		'-N', '--number', dest='number', default=None, type=int,
 		help='Установить номер трека'
+	)
+
+	parser.add_argument(
+		'-C', '--numerate-tracks', dest='numerate', default=False,
+		action='store_true',
+		help='Установить номер трека в соответствии с порядком аргумента ' +
+		     'в командной строке / в папке'
 	)
 
 	parser.add_argument(
@@ -153,26 +170,29 @@ def make_parser():
 # ~~~~~                             CONFIG                             ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-def make_config(args: ap.Namespace):
+def number2str(number, total):
+	return ('%s%s' % (
+		str(number or ''),
+		'/' + str(total) if total else ''
+	) or None)
+
+def make_config(args):
 	cfg        = args
 	cfg.nameex = re.compile(r'^(?:(\d+)\.)?\s*(.*)\s* - \s*(.*)\.mp3$')
 	cfg.setcom = 'id3v2 -2 --%s "%s" "%s"'
 	cfg.getcom = 'id3v2 -R "%s" | grep "%s" | cut -d' ' -f2- | sed -e "s/\s\+([0-9]\+)$//"'
+	cfg.remcom = 'id3v2 -r "%s" "%s"'
 	cfg.files  = ( args.files if len(args.files) != 0 else
-		[ f for f in os.listdir() if re.match(r'.*\.mp3', f) ] )
+		[ f for f in os.listdir(cfg.dir) if re.match(r'.*\.mp3', f) ] )
 	cfg.fields = list(filter(lambda x: x[1] is not None, [
-		( TIT2, args.name        ),
-		( TRCK, '%s%s' % (
-			str(args.num or ''),
-			'/' + str(args.total)
-				if args.total else ''
-		) or None                  ),
-		( TPE1, args.artist      ),
-		( TPE2, args.albumartist ),
-		( TALB, args.album       ),
-		( TCON, args.genre       ),
-		( PCNT, args.playcount   ),
-		( TYER, args.year        ),
+		( TIT2, args.name                        ),
+		( TRCK, number2str(args.num, args.total) ),
+		( TPE1, args.artist                      ),
+		( TPE2, args.albumartist                 ),
+		( TALB, args.album                       ),
+		( TCON, args.genre                       ),
+		( PCNT, args.playcount                   ),
+		( TYER, args.year                        ),
 	]))
 
 	return args
@@ -186,6 +206,34 @@ def make_config(args: ap.Namespace):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 def set_field(cfg, frame, value, file):
+	ret = 0
+
+	if frame == TRCK:
+		m = re.match('(\d+)(/\d+)?', value)
+		n = int(m.group(1)) if m.group(1) is not None else None
+		t = int(m.group(2)) if m.group(1) is not None else None
+
+		if cfg.num is None and cfg.tot is None:
+			cfg.num = n
+			cfg.tot = t
+		elif (
+				(cfg.num is not None and cfg.tot is not None ) or
+				(cfg.num is     None and n       is     None ) or
+				(cfg.tot is     None and t       is     None )
+		):
+			return 0
+		elif cfg.num is None:
+			cfg.num = n
+			t = cfg.tot
+		else:
+			cfg.tot = t
+			n = cfg.num
+
+		com   = cfg.remcom % (frame, file)
+		cfg.verbose and print(com)
+		ret   = -1 if os.system(com) != 0 else 0
+		value = number2str(n, t)
+
 	com = cfg.com % (frame, value, file)
 	cfg.verbose and print(com)
 	return -1 if os.system(com) != 0 else 0
@@ -243,20 +291,23 @@ def main():
 	cfg = make_config(make_parser().parse_args())
 	ret = 0
 
-	for file in cfg.files:
-		m = re.match(cfg.tmpl, file)
+	for i in range(len(cfg.files)):
+		file = cfg.files[i]
+		cfg.num = None
+		cfg.tot = None
 
-		if m is None:
-			print("Error: invalid name of file %s" % file, file=sys.stderr)
-			ret = 1
-			continue
+		ret |= set_fields(cfg, file)
+		if cfg.addgenres is not None:
+			ret   |= add_genres(cfg, file)
+		if cfg.numerate:
+			total  = cfg.totalauto and len(cfg.files) or None
+			ret   |= set_field(cfg, TRCK, number2str(i+1, total))
+		elif cfg.totalauto:
+			ret   |= set_field(cfg, TRCK, number2str(None, len(cfg.files)))
+		if cfg.parsefilename:
+			ret   |= set_fields_by_filename(cfg, file)
 
-		for flag, getval in cfg.fields:
-			com = cfg.com % (flag, getval(m) or '', file)
-			print(com)
-			os.system(com)
-
-		print()
+		cfg.verbose and print()
 
 	return ret
 
