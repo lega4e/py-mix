@@ -148,10 +148,17 @@ def make_parser():
 	)
 
 	parser.add_argument(
-		'-L', '--same-artist', dest='sameartist', default=True,
+		'-S', '--same-artist', dest='sameartist', default=True,
 		action='store_false',
 		help='При получении полей из имени файла устанавливать не только ' +
 		     'исполнителя, но и исполнителя альбома'
+	)
+
+	parser.add_argument(
+		'-L', '--same-album', dest='samealbum', default=False,
+		action='store_true',
+		help='При получении полей из имени файла устанавливать альбом ' +
+		     'в исполнителя'
 	)
 
 	parser.add_argument(
@@ -258,7 +265,8 @@ def set_fields_by_filename(cfg, file):
 			(cfg.number, TRCK, m.group(1)),
 			(cfg.artist, TPE1, m.group(2)),
 			(cfg.name,   TIT2, m.group(3)),
-			*(cfg.sameartist and [ (cfg.albumartist, TPE2, m.group(2)) ] or [])
+			*(cfg.sameartist and [ (cfg.albumartist, TPE2, m.group(2)) ] or []),
+			*(cfg.samealbum  and [ (cfg.album,       TALB, m.group(2)) ] or []),
 	]
 
 	ret = 0
@@ -320,7 +328,6 @@ def main():
 			total  = cfg.totalauto and len(cfg.files) or None
 			ret   |= set_field(cfg, TRCK, number2str(i+1, total), file)
 		elif cfg.totalauto:
-			print(number2str(None, len(cfg.files)))
 			ret   |= set_field(cfg, TRCK, number2str(None, len(cfg.files)), file)
 		if cfg.parsefilename:
 			ret   |= set_fields_by_filename(cfg, file)
