@@ -1,6 +1,13 @@
 #!/usr/bin/python3
 
 #
+# Алгоритм:
+# 1. Считать аргументы командной строки, установить конфиг
+# 2. Обработать все предоставленные файлы:
+#    - Считать текущие значения
+#    - Сформировать запрос изменения тегов в зависимости от аргументов
+#    - Обработать запрос
+#
 # TODO: artist as dir
 # TODO: albartist as dir
 # TODO: album as dir
@@ -12,10 +19,10 @@ import mutagen
 import os
 import re
 import subprocess as sbprc
-import sys
 
 from copy    import deepcopy
 from mutagen import id3, mp3, flac
+from sys     import stderr
 
 
 
@@ -231,7 +238,7 @@ def make_parser():
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 class Track:
-	def __init__(self, number, total):
+	def __init__(self, number: int, total: int):
 		self.n = number;
 		self.t = total
 
@@ -243,7 +250,7 @@ class Track:
 
 
 class Genre:
-	def __init__(self, genre):
+	def __init__(self, genre: [ str ]):
 		self.g = genre
 
 	def __str__(self):
@@ -258,6 +265,7 @@ class Genre:
 
 
 class Meta:
+	'Represents meta information all of track the program work with'
 	def __init__(
 		self,
 		name:      str   = None,
@@ -291,6 +299,7 @@ class Meta:
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 class Query:
+	'Represents query for changing one track'
 	def __init__(
 		self,
 		new: Meta             = None,
@@ -302,12 +311,20 @@ class Query:
 		self.mut = mut
 
 
+class QueryUnit:
+	'Represents query for changing a single tag in track'
+	def __init__(self, id3: str, flac: str, old, new):
+		self.id3  = id3
+		self.flac = flac
+		self.old  = old
+		self.new  = new
+
 
 
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
-# ~~~~~                           ACCESSORY                            ~~~~~ #
+# ~~~~~                      ACCESSORY FUNCTIONS                       ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 def extension(file: str, error_if_no=True):
@@ -325,6 +342,16 @@ def remove_duplicates(l: list):
 			res.append(val)
 	return res
 
+def confirm_interface(file: str, mut: mutagen.FileType=None):
+	if mut is None:
+		try:    mut = mutagen.File(file)
+		except: raise ValueError(file)
+	return mut
+
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ converting ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+# Если передать None, вернёт None
 
 def track2str(number: int, total: int) -> str:
 	return ('%s%s' % (
@@ -336,12 +363,8 @@ def str2track(track: str) -> (int, int):
 	if track is None:
 		return (None, None)
 	m = re.match(r'(\d+)?(?:/(\d+))?', track)
-	try:
-		number = int(m.group(1))
-		total  = int(m.group(2))
-	except:
-		raise ValueError(track)
-	return (number, total)
+	try:    return int(m.group(1)), int(m.group(2))
+	except: raise ValueError('Invalid track number or total track: "%s"' % track)
 
 
 def genre2str(genre: [ str ]) -> str:
@@ -358,13 +381,6 @@ def str2genre(genre: str) -> [ str ]:
 	)) or None)
 
 
-def confirm_interface(file: str, mut: mutagen.FileType=None):
-	if mut is None:
-		try:    mut = mutagen.File(file)
-		except: raise ValueError(file)
-	return mut
-
-
 
 
 
@@ -372,8 +388,19 @@ def confirm_interface(file: str, mut: mutagen.FileType=None):
 # ~~~~~                       FUNCTIONS FOR META                       ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
+def meta_from_file(file: str, mut: mutagen.FileType):
+	ex = extension(file)
+
+	if ex == 'mp3':
+		return meta_from_mp3(file, mut)
+	elif ex == 'flac':
+		return meta_from_flac(file, mut)
+	else:
+		raise ValueError('Unknown format: %s' % l[-1])
+
+
+
 def meta_from_mp3(file, mut: mp3.MP3):
-	mut         = confirm_interface(file, mut)
 	int_or_none = lambda x: None if x is None else int(x)
 	extract     = lambda x: None if x is None else x.text[0]
 	extracti    = lambda x: None if x is None else int(x.text[0])
@@ -397,11 +424,10 @@ def meta_from_mp3(file, mut: mp3.MP3):
 
 
 def meta_from_flac(file, mut):
-	mut         = confirm_interface(file, mut)
 	int_or_none = lambda x: None if x is None else int(x[0])
 	extract     = lambda x: None if x is None else x[0]
 	extractg    = lambda x: (None if x is None else
-	                        Genre(str2genre(cfg.agendels[0].join(x))))
+	                         Genre(str2genre(cfg.agendels[0].join(x))))
 	extracttrk  = lambda x, y: (None if x is None and y is None else
 	                            Track(int_or_none(x), int_or_none(y)))
 
@@ -420,42 +446,37 @@ def meta_from_flac(file, mut):
 
 
 
-def meta_from_file(file, mut: mutagen.FileType):
-	ex = extension(file)
-
-	if ex == 'mp3':
-		return meta_from_mp3(file, mut)
-	elif ex == 'flac':
-		return meta_from_flac(file, mut)
-	else:
-		raise ValueError('Unknown format: %s' % l[-1])
-
-
-
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 # ~~~~~                        QUERY FUNCTIONS                         ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-class QueryUnit:
-	def __init__(self, id3, flac, old, new):
-		self.id3  = id3
-		self.flac = flac
-		self.old  = old
-		self.new  = new
+def process_query(q: Query, file: str):
+	tags = [
+		QueryUnit(TIT2, NAME,      q.old.name,      q.new.name),
+		QueryUnit(TPE1, ARTIST,    q.old.artist,    q.new.artist),
+		QueryUnit(TPE2, ALBARTIST, q.old.albartist, q.new.albartist),
+		QueryUnit(TALB, ALBUM,     q.old.album,     q.new.album),
+		QueryUnit(TCON, GENRE,     q.old.genre,     q.new.genre),
+		QueryUnit(TRCK, TRACK,     q.old.track,     q.new.track),
+		QueryUnit(TYER, YEAR,      q.old.year,      q.new.year),
+		QueryUnit(TPOS, CD,        q.old.cd,        q.new.cd),
+		QueryUnit(PCNT, PLAYCNT,   q.old.playcnt,   q.new.playcnt),
+		QueryUnit(COMM, COMMENT,   q.old.comment,   q.new.comment),
+	]
+
+	q.mut = confirm_interface(file, q.mut)
+	for tag in tags:
+		set_tag(tag, q.mut)
+
 
 
 def set_tag(u: QueryUnit, mut):
-	print('set tag:', u.id3, u.new, u.old)
 	if u.new == u.old:
 		return
 
-	if isinstance(mut, id3.ID3):
-		if u.id3 is not None:
-			mut.setall(u.id3, [ eval('id3.%s(3, "%s")' % (u.id3, str(u.new))) ])
-			cfg.verbose and print('%s = %s' % (u.id3, str(u.new)))
-	elif isinstance(mut, mp3.MP3):
+	if isinstance(mut, mp3.MP3):
 		if u.id3 is not None:
 			if u.id3 == PCNT:
 				mut[u.id3] = eval('id3.%s(%s)' % (u.id3, str(u.new)))
@@ -473,25 +494,6 @@ def set_tag(u: QueryUnit, mut):
 		raise TypeError('Unknown type: %s' % type(mut))
 
 
-def process_query(q: Query, file: str):
-	tags = [
-			QueryUnit(TIT2, NAME,      q.old.name,      q.new.name),
-			QueryUnit(TPE1, ARTIST,    q.old.artist,    q.new.artist),
-			QueryUnit(TPE2, ALBARTIST, q.old.albartist, q.new.albartist),
-			QueryUnit(TALB, ALBUM,     q.old.album,     q.new.album),
-			QueryUnit(TCON, GENRE,     q.old.genre,     q.new.genre),
-			QueryUnit(TRCK, TRACK,     q.old.track,     q.new.track),
-			QueryUnit(TYER, YEAR,      q.old.year,      q.new.year),
-			QueryUnit(TPOS, CD,        q.old.cd,        q.new.cd),
-			QueryUnit(PCNT, PLAYCNT,   q.old.playcnt,   q.new.playcnt),
-			QueryUnit(COMM, COMMENT,   q.old.comment,   q.new.comment),
-	]
-
-	q.mut = confirm_interface(file, q.mut)
-	for tag in tags:
-		set_tag(tag, q.mut)
-
-
 
 
 
@@ -507,37 +509,29 @@ def make_query(file, number, total):
 	q     = Query()
 	q.mut = confirm_interface(file, q.mut)
 	q.old = meta_from_file(file, q.mut)
-	print(str(q.old.__dict__))
-	print(str(q.old.genre.__dict__))
-	print(str(q.old.track.__dict__))
 	q.new = deepcopy(q.old)
 
-	if cfg.parsefilename:
-		add_tags_from_filename(q.new, file)
-	if cfg.numerate:
-		q.new.track.n = number
-	if cfg.totalauto:
-		q.new.track.t = total
+	if cfg.parsefilename: add_tags_from_filename(q.new, file)
+	if cfg.numerate:      q.new.track.n = number
+	if cfg.totalauto:     q.new.track.t = total
+
 	add_tags_from_arguments(q.new)
+
 	if cfg.addgenres:
 		q.new.genre.g = (remove_duplicates(
 			(q.new.genre.g or []) + cfg.addgenres
 		))
+
 	cfg.sortgenres and q.new.genre.g.sort()
-	print(str(q.new.__dict__))
-	print(str(q.new.genre.__dict__))
-	print(str(q.new.track.__dict__))
 
 	return q
 
 
 
 def add_tags_from_filename(meta, file: str):
-	print('Parse filename')
 	m = re.match(cfg.nameex, os.path.basename(file.replace('_', ' ')))
 	if m is None:
-		print("Error: invalid name of file %s" % file, file=sys.stderr)
-		return 1
+		raise ValueError("Error: invalid name of file %s" % file)
 
 	if m.group(1) is not None: meta.track.n = int(m.group(1))
 	if m.group(2) is not None: meta.artist  = m.group(2)
@@ -591,20 +585,31 @@ def set_config(args):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 def main():
+	ret = 0
 	set_config(make_parser().parse_args())
 
 	cfg.verbose and print()
 
 	for i in range(len(cfg.files)):
 		file = cfg.files[i]
-		q = make_query(file, i+1, len(cfg.files))
+		try:
+			q = make_query(file, i+1, len(cfg.files))
 
-		cfg.verbose and print('File \'%s\'' % file)
-		process_query(q, file)
-		q.mut.save()
-		cfg.verbose and print()
+			cfg.verbose and print('File \'%s\'' % file)
+			process_query(q, file)
+			q.mut.save()
+			cfg.verbose and print()
 
-	return 0
+		except ValueError as e:
+			print(e, file=stderr)
+			print('Skip file "%s"' % file, file=stderr)
+			ret = 1
+
+		except TypeError:
+			print('Error: unknown file format "%s"' % file, file=stderr)
+			ret = 1
+
+	return ret
 
 
 if __name__ == '__main__':
