@@ -1,23 +1,10 @@
 #!/usr/bin/python3
 
 #
-# Описание работы
-#
-# Для каждого mp3 файла программа парсит его имя, извлекая
-# 1) номер дорожки,
-# 2) исполнителя,
-# 3) название.
-# Номер дорожки опционален. Файлы должны быть названы по следующему
-# шаблону: <номер>.<Исполнитель> - <Название>.mp3. Подробнее см.
-# переменную nameex.
-#
-# Спарисв файлы, программа устанавливает соответствующие
-# теги с помощью утилиты id3v2
-#
-# TODO: verbose
 # TODO: artist as dir
 # TODO: albartist as dir
 # TODO: album as dir
+# TODO: nice error handing
 #
 
 import argparse as ap
@@ -28,7 +15,7 @@ import subprocess as sbprc
 import sys
 
 from copy    import deepcopy
-from mutagen import id3, flac
+from mutagen import id3, mp3, flac
 
 
 
@@ -137,7 +124,7 @@ def make_parser():
 	)
 
 	parser.add_argument(
-		'-c', '--play-count', dest='playcnt', default=None, type=int,
+		'-p', '--play-count', dest='playcnt', default=None, type=int,
 		help='Установить количество прослушиваний',
 	)
 
@@ -170,12 +157,17 @@ def make_parser():
 	)
 
 	parser.add_argument(
+		'-c', '--cd', dest='cd', default=None, type=int,
+		help='Номер CD-диска',
+	)
+
+	parser.add_argument(
 		'-M', '--comment', dest='comment', default=None, type=str,
 		help='Установить комментарий'
 	)
 
 	parser.add_argument(
-		'-p', '--parse-filename', dest='parsefilename', default=False,
+		'-F', '--parse-filename', dest='parsefilename', default=False,
 		action='store_true',
 		help='Извлекает из названия файла номер трека (опционально) ' +
 		     'исполнителя и название (подробнее см. регулярку в исходниках); ' +
@@ -205,14 +197,13 @@ def make_parser():
 	)
 
 	parser.add_argument(
-		'-B', '--album-artist-as-direcotry', dest='albartdir', default=False,
+		'-B', '--albumartist-as-direcotry', dest='albartdir', default=False,
 		action='store_true',
 		help='Установить исполнителя альбома в название директории файла'
 	)
 
-
 	parser.add_argument(
-		'-e', '--album-direcotry', dest='albdir', default=False,
+		'-e', '--album-as-direcotry', dest='albdir', default=False,
 		action='store_true',
 		help='Установить альбом в название директории файла'
 	)
@@ -381,45 +372,50 @@ def confirm_interface(file: str, mut: mutagen.FileType=None):
 # ~~~~~                       FUNCTIONS FOR META                       ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-def meta_from_mp3(file, mut):
+def meta_from_mp3(file, mut: mp3.MP3):
 	mut         = confirm_interface(file, mut)
 	int_or_none = lambda x: None if x is None else int(x)
-	extract     = lambda x: None if x is None else str(x)
+	extract     = lambda x: None if x is None else x.text[0]
+	extracti    = lambda x: None if x is None else int(x.text[0])
+	extractpcnt = lambda x: None if x is None else x.count
+	extracttrk  = lambda x: None if x is None else Track(*str2track(x.text[0]))
+	extractgnr  = lambda x: None if x is None else Genre(str2genre(x.text[0]))
 
 	return Meta(
-		name      = extract(tags.get(TIT2)),
-		artist    = extract(tags.get(TPE1)),
-		albartist = extract(tags.get(TPE2)),
-		album     = extract(tags.get(TALB)),
-		tracknum  = str2track(extract(tags.get(TRCK)))[0],
-		tracktot  = str2track(extract(tags.get(TRCK)))[1],
-		genre     = str2genre(extract(tags.get(TCON))),
-		playcnt   = int_or_none(extract(tags.get(PCNT))),
-		year      = int_or_none(extract(tags.get(TYER))),
-		cd        = int_or_none(extract(tags.get(TPOS))),
-		comment   = extract(tags.get(COMM)),
+		name      = extract(mut.get(TIT2)),
+		artist    = extract(mut.get(TPE1)),
+		albartist = extract(mut.get(TPE2)),
+		album     = extract(mut.get(TALB)),
+		track     = extracttrk(mut.get(TRCK)),
+		genre     = extractgnr(mut.get(TCON)),
+		playcnt   = extractpcnt(mut.get(PCNT)),
+		year      = extracti(mut.get(TYER)),
+		cd        = extracti(mut.get(TPOS)),
+		comment   = extract(mut.get(COMM)),
 	)
 
 
 
 def meta_from_flac(file, mut):
 	mut         = confirm_interface(file, mut)
-	int_or_none = lambda x: None if x is None else int(x)
+	int_or_none = lambda x: None if x is None else int(x[0])
 	extract     = lambda x: None if x is None else x[0]
-	extractg    = lambda x: None if x is None else cfg.agendels[0].join(x)
+	extractg    = lambda x: (None if x is None else
+	                        Genre(str2genre(cfg.agendels[0].join(x))))
+	extracttrk  = lambda x, y: (None if x is None and y is None else
+	                            Track(int_or_none(x), int_or_none(y)))
 
 	return Meta(
-		name      = extract(tags.get(NAME)),
-		artist    = extract(tags.get(ARTIST)),
-		albartist = extract(tags.get(ALBARTIST)),
-		album     = extract(tags.get(ALBUM)),
-		tracknum  = int_or_none(extract(tags.get(TRACKNUM))),
-		tracktot  = int_or_none(extract(tags.get(TRACKTOT))),
-		genre     = str2genre(extractg(tags.get(GENRE))),
+		name      = extract(mut.get(NAME)),
+		artist    = extract(mut.get(ARTIST)),
+		albartist = extract(mut.get(ALBARTIST)),
+		album     = extract(mut.get(ALBUM)),
+		track     = extracttrk(mut.get(TRACKNUM), mut.get(TRACKTOT)),
+		genre     = extractg(mut.get(GENRE)),
 		playcnt   = None,
-		year      = int_or_none(extract(tags.get(YEAR))),
+		year      = int_or_none(mut.get(YEAR)),
 		cd        = None,
-		comment   = extract(tags.get(COMMENT)),
+		comment   = extract(mut.get(COMMENT)),
 	)
 
 
@@ -451,18 +447,28 @@ class QueryUnit:
 
 
 def set_tag(u: QueryUnit, mut):
+	print('set tag:', u.id3, u.new, u.old)
 	if u.new == u.old:
 		return
 
 	if isinstance(mut, id3.ID3):
 		if u.id3 is not None:
 			mut.setall(u.id3, [ eval('id3.%s(3, "%s")' % (u.id3, str(u.new))) ])
+			cfg.verbose and print('%s = %s' % (u.id3, str(u.new)))
+	elif isinstance(mut, mp3.MP3):
+		if u.id3 is not None:
+			if u.id3 == PCNT:
+				mut[u.id3] = eval('id3.%s(%s)' % (u.id3, str(u.new)))
+			else:
+				mut[u.id3] = eval('id3.%s(3, "%s")' % (u.id3, str(u.new)))
+			cfg.verbose and print('%s = %s' % (u.id3, str(u.new)))
 	elif isinstance(mut, flac.FLAC):
 		if u.flac == TRACK:
-			mut[TRACKNUM] = u.new.n
-			mut[TRACKTOT] = u.new.t
+			mut[TRACKNUM] = str(u.new.n)
+			mut[TRACKTOT] = str(u.new.t)
 		elif u.flac is not None:
-			mut[u.flac] = u.new
+			mut[u.flac] = str(u.new)
+		cfg.verbose and print('%s = %s' % (u.flac, str(u.new)))
 	else:
 		raise TypeError('Unknown type: %s' % type(mut))
 
@@ -474,7 +480,7 @@ def process_query(q: Query, file: str):
 			QueryUnit(TPE2, ALBARTIST, q.old.albartist, q.new.albartist),
 			QueryUnit(TALB, ALBUM,     q.old.album,     q.new.album),
 			QueryUnit(TCON, GENRE,     q.old.genre,     q.new.genre),
-			QueryUnit(TRCK, TRACK,     q.old.track,     q.old.track),
+			QueryUnit(TRCK, TRACK,     q.old.track,     q.new.track),
 			QueryUnit(TYER, YEAR,      q.old.year,      q.new.year),
 			QueryUnit(TPOS, CD,        q.old.cd,        q.new.cd),
 			QueryUnit(PCNT, PLAYCNT,   q.old.playcnt,   q.new.playcnt),
@@ -501,33 +507,43 @@ def make_query(file, number, total):
 	q     = Query()
 	q.mut = confirm_interface(file, q.mut)
 	q.old = meta_from_file(file, q.mut)
+	print(str(q.old.__dict__))
+	print(str(q.old.genre.__dict__))
+	print(str(q.old.track.__dict__))
 	q.new = deepcopy(q.old)
 
 	if cfg.parsefilename:
 		add_tags_from_filename(q.new, file)
 	if cfg.numerate:
-		q.new.tracknum = number
+		q.new.track.n = number
 	if cfg.totalauto:
-		q.new.tracktot = total
+		q.new.track.t = total
 	add_tags_from_arguments(q.new)
 	if cfg.addgenres:
 		q.new.genre.g = (remove_duplicates(
-			(q.new.genre.g or []) + cfg.addgenres or []
-		) or None)
+			(q.new.genre.g or []) + cfg.addgenres
+		))
+	cfg.sortgenres and q.new.genre.g.sort()
+	print(str(q.new.__dict__))
+	print(str(q.new.genre.__dict__))
+	print(str(q.new.track.__dict__))
+
+	return q
 
 
 
-def add_tags_from_filename(m, file):
-	m = re.match(cfg.nameex, os.path.basename(file))
+def add_tags_from_filename(meta, file: str):
+	print('Parse filename')
+	m = re.match(cfg.nameex, os.path.basename(file.replace('_', ' ')))
 	if m is None:
 		print("Error: invalid name of file %s" % file, file=sys.stderr)
 		return 1
 
-	if m.group(1) is not None: m.track.n = m.group(1)
-	if m.group(2) is not None: m.artist  = m.group(2)
-	if m.group(3) is not None: m.name    = m.group(3)
-	if m.group(2) is not None and cfg.sameartist: m.albumartist = m.group(2)
-	if m.group(2) is not None and cfg.samealbum:  m.album       = m.group(2)
+	if m.group(1) is not None: meta.track.n = int(m.group(1))
+	if m.group(2) is not None: meta.artist  = m.group(2)
+	if m.group(3) is not None: meta.name    = m.group(3)
+	if m.group(2) is not None and cfg.sameartist: meta.albartist = m.group(2)
+	if m.group(2) is not None and cfg.samealbum:  meta.album     = m.group(2)
 
 
 
@@ -538,11 +554,11 @@ def add_tags_from_arguments(m):
 	m.artist    = cfg.artist    if cfg.artist    is not None else m.artist
 	m.albartist = cfg.albartist if cfg.albartist is not None else m.albartist
 	m.album     = cfg.album     if cfg.album     is not None else m.album
-	m.genre     = cfg.genre     if cfg.genre     is not None else m.genre
+	m.genre.g   = cfg.genre     if cfg.genre     is not None else m.genre.g
 	m.playcnt   = cfg.playcnt   if cfg.playcnt   is not None else m.playcnt
 	m.year      = cfg.year      if cfg.year      is not None else m.year
+	m.cd        = cfg.cd        if cfg.cd        is not None else m.cd
 	m.comment   = cfg.comment   if cfg.comment   is not None else m.comment
-	raise NotImplementedError()
 
 
 
@@ -552,10 +568,11 @@ def add_tags_from_arguments(m):
 # ~~~~~                             CONFIG                             ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-def make_config(args):
+def set_config(args):
+	global cfg
 	cfg           = args
 	cfg.agendels  = ALLOWED_GENDELS
-	cfg.nameex    = re.compile(r'^(?:(\d+)\.)?\s*(.*)\s* - \s*(.*)\.mp3$')
+	cfg.nameex    = re.compile(r'^(?:(\d+)\.)?\s*(.+)\s*[ _][-—][ _]\s*(.+)\.(mp3|flac)$')
 	cfg.setcom    = 'id3v2 -2 --%s "%s" "%s"'
 	cfg.remcom    = 'id3v2 -r "%s" "%s"'
 	cfg.tracknum  = int(cfg.tracknum) if cfg.tracknum is not None else None
@@ -564,8 +581,6 @@ def make_config(args):
 	cfg.genre     = str2genre(cfg.genre)
 	cfg.files     = ( args.files if len(args.files) != 0 else
 		[ f for f in os.listdir(cfg.dir) if re.match(r'.*\.(mp3|flac)', f) ] )
-
-	return cfg
 
 
 
@@ -576,8 +591,7 @@ def make_config(args):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 def main():
-	global cfg
-	cfg = make_config(make_parser().parse_args())
+	set_config(make_parser().parse_args())
 
 	cfg.verbose and print()
 
@@ -587,6 +601,7 @@ def main():
 
 		cfg.verbose and print('File \'%s\'' % file)
 		process_query(q, file)
+		q.mut.save()
 		cfg.verbose and print()
 
 	return 0
