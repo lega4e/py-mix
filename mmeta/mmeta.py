@@ -14,6 +14,11 @@
 # Спарисв файлы, программа устанавливает соответствующие
 # теги с помощью утилиты id3v2
 #
+# TODO: verbose
+# TODO: artist as dir
+# TODO: albartist as dir
+# TODO: album as dir
+#
 
 import argparse as ap
 import mutagen
@@ -268,7 +273,7 @@ class Meta:
 		artist:    str   = None,
 		albartist: str   = None,
 		album:     str   = None,
-		track:     Track = None
+		track:     Track = None,
 		genre:     Genre = None,
 		playcnt:   int   = None,
 		year:      int   = None,
@@ -348,12 +353,12 @@ def str2track(track: str) -> (int, int):
 	return (number, total)
 
 
-def genre2str(genres: [ str ]) -> str:
+def genre2str(genre: [ str ]) -> str:
 	if genre is None:
 		return None
 	return cfg.gendel.join(genre)
 
-def str2genre(genres: str) -> [ str ]:
+def str2genre(genre: str) -> [ str ]:
 	if genre is None:
 		return None
 	return (list(filter(
@@ -548,7 +553,6 @@ def add_tags_from_arguments(m):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 def make_config(args):
-	global cfg
 	cfg           = args
 	cfg.agendels  = ALLOWED_GENDELS
 	cfg.nameex    = re.compile(r'^(?:(\d+)\.)?\s*(.*)\s* - \s*(.*)\.mp3$')
@@ -559,113 +563,9 @@ def make_config(args):
 	cfg.addgenres = str2genre(cfg.addgenres)
 	cfg.genre     = str2genre(cfg.genre)
 	cfg.files     = ( args.files if len(args.files) != 0 else
-		[ f for f in os.listdir(cfg.dir) if re.match(r'.*\.mp3', f) ] )
-	cfg.fields    = list(filter(lambda x: x[1] is not None, [
-		( TIT2, args.name                                  ),
-		( TRCK, track2str(args.number, args.total) or None ),
-		( TPE1, args.artist                                ),
-		( TPE2, args.albumartist                           ),
-		( TALB, args.album                                 ),
-		( TCON, args.genre                                 ),
-		( PCNT, args.playcnt                               ),
-		( TYER, args.year                                  ),
-	]))
+		[ f for f in os.listdir(cfg.dir) if re.match(r'.*\.(mp3|flac)', f) ] )
 
-	return args
-
-
-
-
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
-# ~~~~~                         CORE FUNCTIONS                         ~~~~~ #
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
-
-def set_field(cfg, frame, value, file):
-	if value is None:
-		return 0
-
-	ret = 0
-
-	if frame == TRCK:
-		m = re.match(r'(\d+)?(?:/(\d+))?', value)
-		n = int(m.group(1)) if m and m.group(1) else None
-		t = int(m.group(2)) if m and m.group(2) else None
-
-		if cfg.num is None and cfg.tot is None:
-			cfg.num = n
-			cfg.tot = t
-		elif (
-				(cfg.num is not None and cfg.tot is not None) or
-				(cfg.num is     None and n       is     None) or
-				(cfg.tot is     None and t       is     None)
-		):
-			return 0
-		elif cfg.num is None:
-			cfg.num = n
-			t = cfg.tot
-		else:
-			cfg.tot = t
-			n = cfg.num
-
-		com   = cfg.remcom % (frame, file)
-		cfg.verbose and print(com)
-		ret   = -1 if not cfg.fake and os.system(com) != 0 else 0
-		value = number2str(n, t)
-
-	com = cfg.setcom % (frame, value, file)
-	cfg.verbose and print(com)
-	return -1 if not cfg.fake and os.system(com) != 0 else 0
-
-
-
-def set_fields_by_filename(cfg, file):
-	m = re.match(cfg.nameex, os.path.basename(file))
-	if m is None:
-		print("Error: invalid name of file %s" % file, file=sys.stderr)
-		return 1
-
-	fields = [
-			(cfg.number, TRCK, m.group(1)),
-			(cfg.artist, TPE1, m.group(2)),
-			(cfg.name,   TIT2, m.group(3)),
-			*(cfg.sameartist and [ (cfg.albumartist, TPE2, m.group(2)) ] or []),
-			*(cfg.samealbum  and [ (cfg.album,       TALB, m.group(2)) ] or []),
-	]
-
-	ret = 0
-	for check, frame, value in fields:
-		if check is not None or value is None:
-			continue
-		ret |= set_field(cfg, frame, value, file)
-
-	return ret
-
-
-
-def set_fields(cfg, file):
-	ret = 0
-	for frame, value in cfg.fields:
-		ret |= set_field(cfg, frame, value, file)
-	return ret
-
-
-
-def add_genre(cfg, file):
-	genre  = sbprc.check_output([ 'id3v2', '-R', '%s' % file ])
-	genre  = genre.decode().split('\n')
-	genre  = list(filter(lambda x: x.startswith(TCON), genre))
-	if len(genre):
-		genre = re.match(r'([^(]*)(\(\d+\))?', genre[0][6:]).group(1).strip()
-	else:
-		genre = ''
-	genre  = list(map(lambda x: x.strip(), re.split(r'[^\w\s]', genre)))
-	genre += list(map(lambda x: x.strip(), re.split(r'[^\w\s]', cfg.addgenres)))
-	genre  = list(filter(lambda x: x, genre))
-	cfg.sortgenres and genre.sort()
-	genre  = remove_duplicates(genre)
-	genre  = cfg.gendel.join(genre)
-	return set_field(cfg, TCON, genre, file)
+	return cfg
 
 
 
@@ -676,32 +576,20 @@ def add_genre(cfg, file):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 def main():
+	global cfg
 	cfg = make_config(make_parser().parse_args())
-	ret = 0
 
 	cfg.verbose and print()
 
 	for i in range(len(cfg.files)):
 		file = cfg.files[i]
-		cfg.num = None
-		cfg.tot = None
+		q = make_query(file, i+1, len(cfg.files))
 
 		cfg.verbose and print('File \'%s\'' % file)
-
-		ret |= set_fields(cfg, file)
-		if cfg.addgenres is not None:
-			ret   |= add_genre(cfg, file)
-		if cfg.numerate:
-			total  = cfg.totalauto and len(cfg.files) or None
-			ret   |= set_field(cfg, TRCK, number2str(i+1, total), file)
-		elif cfg.totalauto:
-			ret   |= set_field(cfg, TRCK, number2str(None, len(cfg.files)), file)
-		if cfg.parsefilename:
-			ret   |= set_fields_by_filename(cfg, file)
-
+		process_query(q, file)
 		cfg.verbose and print()
 
-	return ret
+	return 0
 
 
 if __name__ == '__main__':
