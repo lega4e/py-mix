@@ -22,6 +22,7 @@ import re
 import subprocess as sbprc
 import sys
 
+from copy    import deepcopy
 from mutagen import id3, flac
 
 
@@ -31,6 +32,8 @@ from mutagen import id3, flac
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 # ~~~~~                 CONSTANTS AND GLOBAL VARIABLES                 ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+
+ALLOWED_GENDELS = ';/|'
 
 # flac
 NAME      = 'title'
@@ -90,7 +93,7 @@ def make_parser():
 	)
 
 	parser.add_argument(
-		'-N', '--number', dest='number', default=None, type=int,
+		'-N', '--number', dest='tracknum', default=None, type=int,
 		help='Установить номер трека'
 	)
 
@@ -102,7 +105,7 @@ def make_parser():
 	)
 
 	parser.add_argument(
-		'-t', '--total-tracks', dest='total', default=None, type=int,
+		'-t', '--total-tracks', dest='tracktot', default=None, type=int,
 		help='Установить количество треков в альбоме'
 	)
 
@@ -119,7 +122,7 @@ def make_parser():
 	)
 
 	parser.add_argument(
-		'-A', '--albumartist', dest='albumartist', default=None, type=str,
+		'-A', '--albumartist', dest='albartist', default=None, type=str,
 		help='Установить исполнителя альбома',
 	)
 
@@ -139,13 +142,13 @@ def make_parser():
 	)
 
 	parser.add_argument(
-		'-G', '--add-genre', dest='addgenres', default=None, type=str,
+		'-G', '--add-genres', dest='addgenres', default=None, type=str,
 		help='Добавить жанры к существующим; если жанров несколько ' +
-		     'они должны быть разделены любыми символами [^\w\s]',
+		     'они должны быть разделены любыми символами %s' % ALLOWED_GENDELS,
 	)
 
 	parser.add_argument(
-		'-s', '--sort-genre', dest='sortgenres', default=False,
+		'-s', '--sort-genres', dest='sortgenres', default=False,
 		action='store_true',
 		help='Отсортировать жанры'
 	)
@@ -159,6 +162,11 @@ def make_parser():
 	parser.add_argument(
 		'-y', '--year', dest='year', default=None, type=int,
 		help='Установить год'
+	)
+
+	parser.add_argument(
+		'-M', '--comment', dest='comment', default=None, type=str,
+		help='Установить комментарий'
 	)
 
 	parser.add_argument(
@@ -230,6 +238,9 @@ class Track:
 	def __init__(self, number, total):
 		self.n = number;
 		self.t = total
+
+	def __str__(self):
+		return track2str(self.n, self.t)
 
 	def __eq__(self, other):
 		return self.n == other.n and self.t == other.t
@@ -311,6 +322,12 @@ def extension(file: str, error_if_no=True):
 		return None
 	return l[-1]
 
+def remove_duplicates(l: list):
+	res = []
+	for val in l:
+		if val not in res:
+			res.append(val)
+	return res
 
 
 def track2str(number: int, total: int) -> str:
@@ -339,10 +356,17 @@ def genre2str(genres: [ str ]) -> str:
 def str2genre(genres: str) -> [ str ]:
 	if genre is None:
 		return None
-	return list(filter(
+	return (list(filter(
 		lambda x: x,
-		map(lambda x: x.strip(), re.split('[%s]' % cfg.agendels, genre)
-	))
+		map(lambda x: x.strip(), re.split('[%s]' % cfg.agendels, genre))
+	)) or None)
+
+
+def confirm_interface(file: str, mut: mutagen.FileType=None):
+	if mut is None:
+		try:    mut = mutagen.File(file)
+		except: raise ValueError(file)
+	return mut
 
 
 
@@ -352,10 +376,8 @@ def str2genre(genres: str) -> [ str ]:
 # ~~~~~                       FUNCTIONS FOR META                       ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-def meta_from_mp3(file):
-	try:    tags = id3.ID3(file)
-	except: raise ValueError(file)
-
+def meta_from_mp3(file, mut):
+	mut         = confirm_interface(file, mut)
 	int_or_none = lambda x: None if x is None else int(x)
 	extract     = lambda x: None if x is None else str(x)
 
@@ -375,10 +397,8 @@ def meta_from_mp3(file):
 
 
 
-def meta_from_flac(file):
-	try:    tags = flac.FLAC(file)
-	except: raise ValueError(file)
-
+def meta_from_flac(file, mut):
+	mut         = confirm_interface(file, mut)
 	int_or_none = lambda x: None if x is None else int(x)
 	extract     = lambda x: None if x is None else x[0]
 	extractg    = lambda x: None if x is None else cfg.agendels[0].join(x)
@@ -399,13 +419,13 @@ def meta_from_flac(file):
 
 
 
-def meta_from_file(file):
+def meta_from_file(file, mut: mutagen.FileType):
 	ex = extension(file)
 
 	if ex == 'mp3':
-		return meta_from_mp3(file)
+		return meta_from_mp3(file, mut)
 	elif ex == 'flac':
-		return meta_from_flac(file)
+		return meta_from_flac(file, mut)
 	else:
 		raise ValueError('Unknown format: %s' % l[-1])
 
@@ -425,7 +445,6 @@ class QueryUnit:
 		self.new  = new
 
 
-
 def set_tag(u: QueryUnit, mut):
 	if u.new == u.old:
 		return
@@ -443,7 +462,6 @@ def set_tag(u: QueryUnit, mut):
 		raise TypeError('Unknown type: %s' % type(mut))
 
 
-
 def process_query(q: Query, file: str):
 	tags = [
 			QueryUnit(TIT2, NAME,      q.old.name,      q.new.name),
@@ -458,11 +476,68 @@ def process_query(q: Query, file: str):
 			QueryUnit(COMM, COMMENT,   q.old.comment,   q.new.comment),
 	]
 
-	if q.mut is None:
-		q.mut = mutagen.FileType(file)
-
+	q.mut = confirm_interface(file, q.mut)
 	for tag in tags:
 		set_tag(tag, q.mut)
+
+
+
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+# ~~~~~                     BUILD QUERY FUNCTIONS                      ~~~~~ #
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+
+# Приоритет установки тегов, если указано несколько источников
+# 1. Наивысший приоритет — указание явно
+# 2. Автоматическое подсчитывание (номер трека, всего треков)
+# 3. Данные из названия файла, имени родительской директории
+def make_query(file, number, total):
+	q     = Query()
+	q.mut = confirm_interface(file, q.mut)
+	q.old = meta_from_file(file, q.mut)
+	q.new = deepcopy(q.old)
+
+	if cfg.parsefilename:
+		add_tags_from_filename(q.new, file)
+	if cfg.numerate:
+		q.new.tracknum = number
+	if cfg.totalauto:
+		q.new.tracktot = total
+	add_tags_from_arguments(q.new)
+	if cfg.addgenres:
+		q.new.genre.g = (remove_duplicates(
+			(q.new.genre.g or []) + cfg.addgenres or []
+		) or None)
+
+
+
+def add_tags_from_filename(m, file):
+	m = re.match(cfg.nameex, os.path.basename(file))
+	if m is None:
+		print("Error: invalid name of file %s" % file, file=sys.stderr)
+		return 1
+
+	if m.group(1) is not None: m.track.n = m.group(1)
+	if m.group(2) is not None: m.artist  = m.group(2)
+	if m.group(3) is not None: m.name    = m.group(3)
+	if m.group(2) is not None and cfg.sameartist: m.albumartist = m.group(2)
+	if m.group(2) is not None and cfg.samealbum:  m.album       = m.group(2)
+
+
+
+def add_tags_from_arguments(m):
+	m.name      = cfg.name      if cfg.name      is not None else m.name
+	m.track.n   = cfg.tracknum  if cfg.tracknum  is not None else m.track.n
+	m.track.t   = cfg.tracktot  if cfg.tracktot  is not None else m.track.t
+	m.artist    = cfg.artist    if cfg.artist    is not None else m.artist
+	m.albartist = cfg.albartist if cfg.albartist is not None else m.albartist
+	m.album     = cfg.album     if cfg.album     is not None else m.album
+	m.genre     = cfg.genre     if cfg.genre     is not None else m.genre
+	m.playcnt   = cfg.playcnt   if cfg.playcnt   is not None else m.playcnt
+	m.year      = cfg.year      if cfg.year      is not None else m.year
+	m.comment   = cfg.comment   if cfg.comment   is not None else m.comment
+	raise NotImplementedError()
 
 
 
@@ -472,18 +547,20 @@ def process_query(q: Query, file: str):
 # ~~~~~                             CONFIG                             ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-
-
 def make_config(args):
 	global cfg
-	cfg          = args
-	cfg.agendels = '/;|'
-	cfg.nameex   = re.compile(r'^(?:(\d+)\.)?\s*(.*)\s* - \s*(.*)\.mp3$')
-	cfg.setcom   = 'id3v2 -2 --%s "%s" "%s"'
-	cfg.remcom   = 'id3v2 -r "%s" "%s"'
-	cfg.files    = ( args.files if len(args.files) != 0 else
+	cfg           = args
+	cfg.agendels  = ALLOWED_GENDELS
+	cfg.nameex    = re.compile(r'^(?:(\d+)\.)?\s*(.*)\s* - \s*(.*)\.mp3$')
+	cfg.setcom    = 'id3v2 -2 --%s "%s" "%s"'
+	cfg.remcom    = 'id3v2 -r "%s" "%s"'
+	cfg.tracknum  = int(cfg.tracknum) if cfg.tracknum is not None else None
+	cfg.tracktot  = int(cfg.tracktot) if cfg.tracktot is not None else None
+	cfg.addgenres = str2genre(cfg.addgenres)
+	cfg.genre     = str2genre(cfg.genre)
+	cfg.files     = ( args.files if len(args.files) != 0 else
 		[ f for f in os.listdir(cfg.dir) if re.match(r'.*\.mp3', f) ] )
-	cfg.fields = list(filter(lambda x: x[1] is not None, [
+	cfg.fields    = list(filter(lambda x: x[1] is not None, [
 		( TIT2, args.name                                  ),
 		( TRCK, track2str(args.number, args.total) or None ),
 		( TPE1, args.artist                                ),
@@ -503,15 +580,6 @@ def make_config(args):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 # ~~~~~                         CORE FUNCTIONS                         ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
-
-def remove_duplicates(l: list):
-	res = []
-	for val in l:
-		if val not in res:
-			res.append(val)
-	return res
-
-
 
 def set_field(cfg, frame, value, file):
 	if value is None:
@@ -585,18 +653,18 @@ def set_fields(cfg, file):
 
 def add_genre(cfg, file):
 	genre  = sbprc.check_output([ 'id3v2', '-R', '%s' % file ])
-	genre  = genres.decode().split('\n')
-	genre  = list(filter(lambda x: x.startswith(TCON), genres))
+	genre  = genre.decode().split('\n')
+	genre  = list(filter(lambda x: x.startswith(TCON), genre))
 	if len(genre):
-		genre = re.match(r'([^(]*)(\(\d+\))?', genres[0][6:]).group(1).strip()
+		genre = re.match(r'([^(]*)(\(\d+\))?', genre[0][6:]).group(1).strip()
 	else:
 		genre = ''
-	genre  = list(map(lambda x: x.strip(), re.split(r'[^\w\s]', genres)))
+	genre  = list(map(lambda x: x.strip(), re.split(r'[^\w\s]', genre)))
 	genre += list(map(lambda x: x.strip(), re.split(r'[^\w\s]', cfg.addgenres)))
-	genre  = list(filter(lambda x: x, genres))
-	cfg.sortgenre and genres.sort()
-	genre  = remove_duplicates(genres)
-	genre  = cfg.gendel.join(genres)
+	genre  = list(filter(lambda x: x, genre))
+	cfg.sortgenres and genre.sort()
+	genre  = remove_duplicates(genre)
+	genre  = cfg.gendel.join(genre)
 	return set_field(cfg, TCON, genre, file)
 
 
@@ -621,7 +689,7 @@ def main():
 		cfg.verbose and print('File \'%s\'' % file)
 
 		ret |= set_fields(cfg, file)
-		if cfg.addgenre is not None:
+		if cfg.addgenres is not None:
 			ret   |= add_genre(cfg, file)
 		if cfg.numerate:
 			total  = cfg.totalauto and len(cfg.files) or None
