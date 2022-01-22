@@ -11,17 +11,17 @@
 # TODO: artist as dir
 # TODO: albartist as dir
 # TODO: album as dir
-# TODO: nice error handing
 #
 
 import argparse as ap
 import mutagen
-import os
 import re
 import subprocess as sbprc
 
 from copy    import deepcopy
 from mutagen import id3, mp3, flac
+from os      import listdir
+from os.path import abspath, basename, join
 from sys     import stderr
 
 
@@ -512,8 +512,11 @@ def make_query(file, number, total):
   q.new = deepcopy(q.old)
 
   if cfg.parsefilename: add_tags_from_filename(q.new, file)
-  if cfg.numerate:      q.new.track.n = number
-  if cfg.totalauto:     q.new.track.t = total
+  if cfg.numerate:      q.new.track.n   = number
+  if cfg.totalauto:     q.new.track.t   = total
+  if cfg.artdir:        q.new.artist    = basename(abspath(cfg.dir))
+  if cfg.albartdir:     q.new.albartist = basename(abspath(cfg.dir))
+  if cfg.albdir:        q.new.album     = basename(abspath(cfg.dir))
 
   add_tags_from_arguments(q.new)
 
@@ -529,7 +532,7 @@ def make_query(file, number, total):
 
 
 def add_tags_from_filename(meta, file: str):
-  m = re.match(cfg.nameex, os.path.basename(file.replace('_', ' ')))
+  m = re.match(cfg.nameex, basename(file.replace('_', ' ')))
   if m is None:
     raise ValueError('Can\'t parse name of file "%s"' % file)
 
@@ -574,7 +577,8 @@ def set_config(args):
   cfg.addgenres = str2genre(cfg.addgenres)
   cfg.genre     = str2genre(cfg.genre)
   cfg.files     = ( args.files if len(args.files) != 0 else
-    [ f for f in os.listdir(cfg.dir) if re.match(r'.*\.(mp3|flac)', f) ] )
+    list(map(lambda x: join(cfg.dir, x),
+    [ f for f in listdir(cfg.dir) if re.match(r'.*\.(mp3|flac)', f) ])) )
 
 
 
