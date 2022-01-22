@@ -217,6 +217,15 @@ def make_config(args):
 # ~~~~~                      ACCESSORY FUNCTIONS                       ~~~~~ #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
+def remove_duplicates(l: list):
+	res = []
+	for val in l:
+		if val not in res:
+			res.append(val)
+	return res
+
+
+
 def set_field(cfg, frame, value, file):
 	if value is None:
 		return 0
@@ -256,7 +265,7 @@ def set_field(cfg, frame, value, file):
 
 
 def set_fields_by_filename(cfg, file):
-	m = re.match(cfg.nameex, file)
+	m = re.match(cfg.nameex, os.path.basename(file))
 	if m is None:
 		print("Error: invalid name of file %s" % file, file=sys.stderr)
 		return 1
@@ -295,10 +304,11 @@ def add_genres(cfg, file):
 		genres = re.match(r'([^(]*)(\(\d+\))?', genres[0][6:]).group(1).strip()
 	else:
 		genres = ''
-	genres  = map(lambda x: x.strip(), re.split(r'[^\w\s]', genres))
-	genres  = list(filter(lambda x: x, genres))
+	genres  = list(map(lambda x: x.strip(), re.split(r'[^\w\s]', genres)))
 	genres += list(map(lambda x: x.strip(), re.split(r'[^\w\s]', cfg.addgenres)))
+	genres  = list(filter(lambda x: x, genres))
 	cfg.sortgenres and genres.sort()
+	genres  = remove_duplicates(genres)
 	genres  = cfg.genredelimeter.join(genres)
 	return set_field(cfg, TCON, genres, file)
 
@@ -313,6 +323,8 @@ def add_genres(cfg, file):
 def main():
 	cfg = make_config(make_parser().parse_args())
 	ret = 0
+
+	cfg.verbose and print()
 
 	for i in range(len(cfg.files)):
 		file = cfg.files[i]
