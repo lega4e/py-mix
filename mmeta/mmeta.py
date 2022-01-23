@@ -21,7 +21,7 @@ import subprocess as sbprc
 from copy    import deepcopy
 from mutagen import id3, mp3, flac
 from os      import listdir
-from os.path import abspath, basename, join
+from os.path import abspath, basename, join, dirname
 from sys     import stderr
 
 
@@ -238,7 +238,7 @@ def make_parser():
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 class Track:
-  def __init__(self, number: int, total: int):
+  def __init__(self, number: int = None, total: int = None):
     self.n = number;
     self.t = total
 
@@ -246,18 +246,18 @@ class Track:
     return track2str(self.n, self.t)
 
   def __eq__(self, other):
-    return self.n == other.n and self.t == other.t
+    return False if other is None else self.n == other.n and self.t == other.t
 
 
 class Genre:
-  def __init__(self, genre: [ str ]):
+  def __init__(self, genre: [ str ] = None):
     self.g = genre
 
   def __str__(self):
     return genre2str(self.g)
 
   def __eq__(self, other):
-    return self.g == other.g
+    return False if other is None else self.g == other.g
 
   @staticmethod
   def from_str(genre):
@@ -363,8 +363,12 @@ def str2track(track: str) -> (int, int):
   if track is None:
     return (None, None)
   m = re.match(r'(-?\d+)?(?:/(-?\d+))?', track)
-  try:    return int(m.group(1)), int(m.group(2))
-  except: raise ValueError('Invalid track number or total track: "%s"' % track)
+  try:
+    num = int(m.group(1)) if m.group(1) is not None else None
+    tot = int(m.group(2)) if m.group(2) is not None else None
+    return num, tot
+  except:
+    raise ValueError('Invalid track number or total track: "%s"' % track)
 
 
 def genre2str(genre: [ str ]) -> str:
@@ -396,7 +400,7 @@ def meta_from_file(file: str, mut: mutagen.FileType):
   elif ex == 'flac':
     return meta_from_flac(file, mut)
   else:
-    raise TypeError()
+    raise TypeError("Unknown file format: '%s'" % ex)
 
 
 
@@ -405,7 +409,7 @@ def meta_from_mp3(file, mut: mp3.MP3):
   extract     = lambda x: None if x is None else x.text[0]
   extracti    = lambda x: None if x is None else int(x.text[0])
   extractpcnt = lambda x: None if x is None else x.count
-  extracttrk  = lambda x: None if x is None else Track(*str2track(x.text[0]))
+  extracttrk  = lambda x: None if x is None else Track(*str2track(x.text[0]) or None)
   extractgnr  = lambda x: None if x is None else Genre(str2genre(x.text[0]))
 
   return Meta(
@@ -417,7 +421,7 @@ def meta_from_mp3(file, mut: mp3.MP3):
     genre     = extractgnr(mut.get(TCON)),
     playcnt   = extractpcnt(mut.get(PCNT)),
     year      = extracti(mut.get(TYER)),
-    cd        = extracti(mut.get(TPOS)),
+    cd        = extract(mut.get(TPOS)),
     comment   = extract(mut.get(COMM)),
   )
 
@@ -479,19 +483,19 @@ def set_tag(u: QueryUnit, mut):
   if isinstance(mut, mp3.MP3):
     if u.id3 is not None:
       if u.id3 == PCNT:
-        mut[u.id3] = eval('id3.%s(%s)' % (u.id3, str(u.new)))
+        if not cfg.fake: mut[u.id3] = eval('id3.%s(%s)' % (u.id3, str(u.new)))
       else:
-        mut[u.id3] = eval('id3.%s(3, "%s")' % (u.id3, str(u.new)))
+        if not cfg.fake: mut[u.id3] = eval('id3.%s(3, "%s")' % (u.id3, str(u.new)))
       cfg.verbose and print('%s = %s' % (u.id3, str(u.new)))
   elif isinstance(mut, flac.FLAC):
     if u.flac == TRACK:
-      mut[TRACKNUM] = str(u.new.n)
-      mut[TRACKTOT] = str(u.new.t)
+      if not cfg.fake: mut[TRACKNUM] = str(u.new.n)
+      if not cfg.fake: mut[TRACKTOT] = str(u.new.t)
     elif u.flac is not None:
-      mut[u.flac] = str(u.new)
+      if not cfg.fake: mut[u.flac] = str(u.new)
     cfg.verbose and print('%s = %s' % (u.flac, str(u.new)))
   else:
-    raise TypeError('Unknown type: %s' % type(mut))
+    raise TypeError('Unknown tag type: %s' % type(mut))
 
 
 
@@ -512,17 +516,21 @@ def make_query(file, number, total):
   q.new = deepcopy(q.old)
 
   if cfg.parsefilename: add_tags_from_filename(q.new, file)
-  if cfg.numerate:      q.new.track.n   = number
-  if cfg.totalauto:     q.new.track.t   = total
-  if cfg.artdir:        q.new.artist    = basename(abspath(cfg.dir))
-  if cfg.albartdir:     q.new.albartist = basename(abspath(cfg.dir))
-  if cfg.albdir:        q.new.album     = basename(abspath(cfg.dir))
+  if cfg.artdir:        q.new.artist    = basename(dirname(abspath(file)))
+  if cfg.albartdir:     q.new.albartist = basename(dirname(abspath(file)))
+  if cfg.albdir:        q.new.album     = basename(dirname(abspath(file)))
+
+  if cfg.numerate or cfg.totalauto:
+    if q.new.track is None:
+      q.new.track = Track()
+    if cfg.numerate:  q.new.track.n = number
+    if cfg.totalauto: q.new.track.t = total
 
   add_tags_from_arguments(q.new)
 
   if cfg.addgenres:
-    q.new.genre.g = (remove_duplicates(
-      (q.new.genre.g or []) + cfg.addgenres
+    q.new.genre = Genre(remove_duplicates(
+      ((q.new.genre or Genre([])).g) + cfg.addgenres
     ))
 
   cfg.sortgenres and q.new.genre.g.sort()
@@ -536,7 +544,11 @@ def add_tags_from_filename(meta, file: str):
   if m is None:
     raise ValueError('Can\'t parse name of file "%s"' % file)
 
-  if m.group(1) is not None: meta.track.n = int(m.group(1))
+  if m.group(1) is not None:
+    if meta.track is None:
+      meta.track = Track()
+    meta.track.n = int(m.group(1))
+
   if m.group(2) is not None: meta.artist  = m.group(2)
   if m.group(3) is not None: meta.name    = m.group(3)
   if m.group(2) is not None and cfg.sameartist: meta.albartist = m.group(2)
@@ -545,17 +557,23 @@ def add_tags_from_filename(meta, file: str):
 
 
 def add_tags_from_arguments(m):
-  m.name      = cfg.name      if cfg.name      is not None else m.name
-  m.track.n   = cfg.tracknum  if cfg.tracknum  is not None else m.track.n
-  m.track.t   = cfg.tracktot  if cfg.tracktot  is not None else m.track.t
-  m.artist    = cfg.artist    if cfg.artist    is not None else m.artist
-  m.albartist = cfg.albartist if cfg.albartist is not None else m.albartist
-  m.album     = cfg.album     if cfg.album     is not None else m.album
-  m.genre.g   = cfg.genre     if cfg.genre     is not None else m.genre.g
-  m.playcnt   = cfg.playcnt   if cfg.playcnt   is not None else m.playcnt
-  m.year      = cfg.year      if cfg.year      is not None else m.year
-  m.cd        = cfg.cd        if cfg.cd        is not None else m.cd
-  m.comment   = cfg.comment   if cfg.comment   is not None else m.comment
+  m.name      = cfg.name         if cfg.name      is not None else m.name
+  m.artist    = cfg.artist       if cfg.artist    is not None else m.artist
+  m.albartist = cfg.albartist    if cfg.albartist is not None else m.albartist
+  m.album     = cfg.album        if cfg.album     is not None else m.album
+  m.genre     = Genre(cfg.genre) if cfg.genre     is not None else m.genre
+  m.playcnt   = cfg.playcnt      if cfg.playcnt   is not None else m.playcnt
+  m.year      = cfg.year         if cfg.year      is not None else m.year
+  m.cd        = cfg.cd           if cfg.cd        is not None else m.cd
+  m.comment   = cfg.comment      if cfg.comment   is not None else m.comment
+
+  if cfg.tracknum is not None or cfg.tracktot is not None:
+    if m.track is None:
+      m.track = Track(cfg.tracknum, cfg.tracktot)
+    else:
+      m.track.n = cfg.tracknum if cfg.tracknum is not None else m.track.n
+      m.track.t = cfg.tracktot if cfg.tracktot is not None else m.track.t
+
 
 
 
@@ -569,7 +587,7 @@ def set_config(args):
   global cfg
   cfg           = args
   cfg.agendels  = ALLOWED_GENDELS
-  cfg.nameex    = re.compile(r'^(?:(\d+)\.)?\s*(.+)\s*[ _][-—][ _]\s*(.+)\.(mp3|flac)$')
+  cfg.nameex    = re.compile(r'^(?:(\d+)\.)?\s*(?:(.+)\s*[ _][-—][ _])?\s*(.+)\.(mp3|flac)$')
   cfg.setcom    = 'id3v2 -2 --%s "%s" "%s"'
   cfg.remcom    = 'id3v2 -r "%s" "%s"'
   cfg.tracknum  = int(cfg.tracknum) if cfg.tracknum is not None else None
@@ -604,13 +622,9 @@ def main():
       process_query(q, file)
       q.mut.save()
 
-    except ValueError as e:
+    except Exception as e:
       print(e, file=stderr)
       print('Skip file "%s"' % file, file=stderr)
-      ret = 1
-
-    except TypeError:
-      print('Unknown file format "%s"' % file, file=stderr)
       ret = 1
 
     cfg.verbose and print()
