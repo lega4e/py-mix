@@ -176,10 +176,16 @@ def make_parser():
   parser.add_argument(
     '-F', '--parse-filename', dest='parsefilename', default=False,
     action='store_true',
-    help='Извлекает из названия файла номер трека (опционально) ' +
-         'исполнителя и название (подробнее см. регулярку в исходниках); ' +
-         'если установлены другие флаги, записывающие те же поля, то ' +
-         'будут использованы они'
+    help='Извлекает из названия файла номер трека (опционально) исполнителя ' +
+         '(опционально) и название (подробнее см. регулярку в исходниках); ' +
+         'если установлены другие флаги, записывающие те же поля, то будут ' +
+         'использованы они'
+  )
+
+  parser.add_argument(
+    '-U', '--parse-filename-name', dest='parsefilenamename', default=False,
+    action='store_true',
+    help='Извлекает название трека из названия файла'
   )
 
   parser.add_argument(
@@ -515,10 +521,11 @@ def make_query(file, number, total):
   q.old = meta_from_file(file, q.mut)
   q.new = deepcopy(q.old)
 
-  if cfg.parsefilename: add_tags_from_filename(q.new, file)
-  if cfg.artdir:        q.new.artist    = basename(dirname(abspath(file)))
-  if cfg.albartdir:     q.new.albartist = basename(dirname(abspath(file)))
-  if cfg.albdir:        q.new.album     = basename(dirname(abspath(file)))
+  if cfg.parsefilename:    add_tags_from_filename(q.new, file)
+  if cfg.parsefilnamename: add_tags_from_filename(q.new, file, onlyname=True)
+  if cfg.artdir:           q.new.artist    = basename(dirname(abspath(file)))
+  if cfg.albartdir:        q.new.albartist = basename(dirname(abspath(file)))
+  if cfg.albdir:           q.new.album     = basename(dirname(abspath(file)))
 
   if cfg.numerate or cfg.totalauto:
     if q.new.track is None:
@@ -539,20 +546,23 @@ def make_query(file, number, total):
 
 
 
-def add_tags_from_filename(meta, file: str):
+def add_tags_from_filename(meta, file, onlyname=False):
   m = re.match(cfg.nameex, basename(file.replace('_', ' ')))
   if m is None:
     raise ValueError('Can\'t parse name of file "%s"' % file)
 
-  if m.group(1) is not None:
+  if m.group(1) is not None and not onlyname:
     if meta.track is None:
       meta.track = Track()
     meta.track.n = int(m.group(1))
 
-  if m.group(2) is not None: meta.artist  = m.group(2)
-  if m.group(3) is not None: meta.name    = m.group(3)
-  if m.group(2) is not None and cfg.sameartist: meta.albartist = m.group(2)
-  if m.group(2) is not None and cfg.samealbum:  meta.album     = m.group(2)
+  if not onlyname:
+    if m.group(2) is not None: meta.artist = m.group(2)
+    if m.group(3) is not None: meta.name   = m.group(3)
+    if m.group(2) is not None and cfg.sameartist: meta.albartist = m.group(2)
+    if m.group(2) is not None and cfg.samealbum:  meta.album     = m.group(2)
+  else:
+    if m.group(3) is not None: meta.name = m.group(3)
 
 
 
@@ -587,9 +597,7 @@ def set_config(args):
   global cfg
   cfg           = args
   cfg.agendels  = ALLOWED_GENDELS
-  cfg.nameex    = re.compile(r'^(?:(\d+)\.)?\s*(?:(.+)\s*[ _][-—][ _])?\s*(.+)\.(mp3|flac)$')
-  cfg.setcom    = 'id3v2 -2 --%s "%s" "%s"'
-  cfg.remcom    = 'id3v2 -r "%s" "%s"'
+  cfg.nameex    = re.compile(r'^(?:(\d+)\.?)?\s*(?:(.+?)\s*[ _][-—][ _])?\s*(.+)\.(mp3|flac)$')
   cfg.tracknum  = int(cfg.tracknum) if cfg.tracknum is not None else None
   cfg.tracktot  = int(cfg.tracktot) if cfg.tracktot is not None else None
   cfg.addgenres = str2genre(cfg.addgenres)
