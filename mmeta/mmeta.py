@@ -521,11 +521,11 @@ def make_query(file, number, total):
   q.old = meta_from_file(file, q.mut)
   q.new = deepcopy(q.old)
 
-  if cfg.parsefilename:    add_tags_from_filename(q.new, file)
-  if cfg.parsefilnamename: add_tags_from_filename(q.new, file, onlyname=True)
-  if cfg.artdir:           q.new.artist    = basename(dirname(abspath(file)))
-  if cfg.albartdir:        q.new.albartist = basename(dirname(abspath(file)))
-  if cfg.albdir:           q.new.album     = basename(dirname(abspath(file)))
+  if cfg.parsefilename:     add_tags_from_filename(q.new, file)
+  if cfg.parsefilenamename: add_tags_from_filename(q.new, file, onlyname=True)
+  if cfg.artdir:            q.new.artist    = basename(dirname(abspath(file)))
+  if cfg.albartdir:         q.new.albartist = basename(dirname(abspath(file)))
+  if cfg.albdir:            q.new.album     = basename(dirname(abspath(file)))
 
   if cfg.numerate or cfg.totalauto:
     if q.new.track is None:
